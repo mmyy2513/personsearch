@@ -124,11 +124,14 @@ class Backbone(nn.Module):
     def forward(self, x):
         # conv1
         residual = x
+        print("Input Shape : ", x.shape)
+        print("\n* Backbone Start")
+        print("===============================================")
         x = self.SpatialConvolution_0(x)
         x = self.BN_1(x)
         x = self.ReLU_2(x)
         x = self.Pooling_3(x)
-
+        print("conv1 --> ", x.shape)
         # conv2
         residual = self.SpatialConvolution_11(x)
         x = self.SpatialConvolution_4(x)
@@ -141,6 +144,7 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_13(x)
         x = self.ReLU_14(x)
+        print("conv2_1 --> ", x.shape)
 
         residual = x
         x = self.SpatialConvolution_15(x)
@@ -153,7 +157,7 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_23(x)
         x = self.ReLU_24(x)
-
+        print("conv2_2 --> ", x.shape)        
         residual = x
         x = self.SpatialConvolution_25(x)
         x = self.BN_26(x)
@@ -165,7 +169,8 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_33(x)
         x = self.ReLU_34(x)
-
+        print("conv2_3 --> ",x.shape)
+        
         # conv3
         residual = self.SpatialConvolution_42(x)
         x = self.SpatialConvolution_35(x)
@@ -178,7 +183,7 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_44(x)
         x = self.ReLU_45(x)
-
+        print("conv3_1 --> ", x.shape)
         residual = x
         x = self.SpatialConvolution_46(x)
         x = self.BN_47(x)
@@ -190,7 +195,7 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_54(x)
         x = self.ReLU_55(x)
-
+        print("conv3_2 --> ", x.shape)
         residual = x
         x = self.SpatialConvolution_56(x)
         x = self.BN_57(x)
@@ -202,7 +207,7 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_64(x)
         x = self.ReLU_65(x)
-
+        print("conv3_3 --> ", x.shape)
         residual = x
         x = self.SpatialConvolution_66(x)
         x = self.BN_67(x)
@@ -214,7 +219,7 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_74(x)
         x = self.ReLU_75(x)
-
+        print("conv3_4 --> ",x.shape)
         # conv4
         residual = self.SpatialConvolution_83(x)
         x = self.SpatialConvolution_76(x)
@@ -227,7 +232,7 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_85(x)
         x = self.ReLU_86(x)
-
+        print("conv4_1 --> ", x.shape)
         residual = x
         x = self.SpatialConvolution_87(x)
         x = self.BN_88(x)
@@ -239,7 +244,7 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_95(x)
         x = self.ReLU_96(x)
-
+        print("conv4_2 --> ", x.shape)
         residual = x
         x = self.SpatialConvolution_97(x)
         x = self.BN_98(x)
@@ -251,5 +256,8 @@ class Backbone(nn.Module):
         x += residual
         x = self.BN_105(x)
         x = self.ReLU_106(x)
-
+        print("conv4_3 --> ",x.shape)
+        print("===============================================")
+        print("* Backbone finish   : feature map")
+        
         return x

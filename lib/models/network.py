@@ -23,7 +23,7 @@ class Network(nn.Module):
            Tong Xiao, Shuang Li, Bochao Wang, Liang Lin, Xiaogang Wang
     """
 
-    def __init__(self):
+    def __init__(self, check):
         super(Network, self).__init__()
         rpn_depth = 1024  # Depth of the feature map fed into RPN
         num_classes = 2  # Background and foreground
@@ -37,10 +37,16 @@ class Network(nn.Module):
         self.proposal_target_layer = ProposalTargetLayer(num_classes)
         self.labeled_matching_layer = LabeledMatchingLayer()
         self.unlabeled_matching_layer = UnlabeledMatchingLayer()
-
+        self.check = check
         self.freeze_blocks()
 
     def forward(self, img, img_info, gt_boxes, probe_roi=None):
+        print("\n               INPUT")
+        print("===============================================")
+        print("1. img :", img.cpu().numpy().shape)
+        print("2. img_info :", img_info.cpu().numpy())
+        print("3. gt_boxes :", gt_boxes[0].cpu().numpy())
+        print("===============================================")
         """
         Args:
             img (Tensor): Single image data.
@@ -81,17 +87,30 @@ class Network(nn.Module):
             cls_labels, pid_labels, gt_proposal_deltas, proposal_inside_ws, proposal_outside_ws = [
                 None
             ] * 5
-
+        
+        print("\n* ROI Pooling      : input = proposals, feature map")
+        print("===============================================")
+        print("* applied NMS (#proposals : 2000 --> 128)")
+        print("Proposals shape : ",proposals.shape)
         # RoI pooling based on region proposals
         pooled_feat = self.roi_pool(base_feat, proposals)
-
+        print("\n* proposals --> projection on feature map")
+        print("Feature map shape : ",base_feat.shape)
+        print("\n* roi pooling result : #proposal x 1024 x 14 x 14")
+        print("Pooled proposals shape : ",pooled_feat.shape)
+        print("===============================================")
         # Extract the features of proposals
         proposal_feat = self.head(pooled_feat).squeeze(2).squeeze(2)
 
+        print("==> Output shape : ", proposal_feat.shape)
+        print("\n\n* Get probs, deltas and features")
         scores = self.cls_score(proposal_feat)
         probs = F.softmax(scores, dim=1)
         proposal_deltas = self.bbox_pred(proposal_feat)
         features = F.normalize(self.feature(proposal_feat))
+        print("Probs shape : ", probs.shape)
+        print("deltas shape : ", proposal_deltas.shape)
+        print("features shape : ", features.shape)
 
         if self.training:
             loss_cls = F.cross_entropy(scores, cls_labels)
@@ -110,7 +129,15 @@ class Network(nn.Module):
             loss_oim = F.cross_entropy(matching_scores, pid_labels, ignore_index=-1)
         else:
             loss_cls, loss_bbox, loss_oim = 0, 0, 0
-
+        print("\n* Calculate Loss(cls, bbox)")
+        print("loss_cls : ", loss_cls.data.cpu().numpy())
+        print("loss_bbox : ", loss_bbox.data.cpu().numpy())
+        print("\n* Calculate Loss(OIM)")
+        print("labeled matching score shape: ", labeled_matching_scores.shape)
+        print("unlabeled matching score shape: ", unlabeled_matching_scores.shape)
+        print("==> loss_oim : ",loss_oim.data.cpu().numpy())
+        print("\n")
+        if self.check == True : exit()
         return (
             proposals,
             probs,
@@ -217,5 +244,5 @@ class Network(nn.Module):
         keep = nms(boxes, probs, cfg.TEST.NMS)
         detections = detections[keep]
         features = features[keep]
-
+        
         return detections, features

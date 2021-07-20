@@ -19,7 +19,7 @@ class Head(nn.Module):
         self.SpatialConvolution_113 = nn.Conv2d(256, 1024, kernel_size=1, stride=1, padding=0)
         self.BN_115 = nn.BatchNorm2d(1024)
         self.ReLU_116 = nn.ReLU(inplace=True)
-
+    
         self.SpatialConvolution_117 = nn.Conv2d(1024, 256, kernel_size=1, stride=1, padding=0)
         self.BN_118 = nn.BatchNorm2d(256)
         self.ReLU_119 = nn.ReLU(inplace=True)
@@ -29,7 +29,7 @@ class Head(nn.Module):
         self.SpatialConvolution_123 = nn.Conv2d(256, 1024, kernel_size=1, stride=1, padding=0)
         self.BN_125 = nn.BatchNorm2d(1024)
         self.ReLU_126 = nn.ReLU(inplace=True)
-
+    
         self.SpatialConvolution_127 = nn.Conv2d(1024, 256, kernel_size=1, stride=1, padding=0)
         self.BN_128 = nn.BatchNorm2d(256)
         self.ReLU_129 = nn.ReLU(inplace=True)
@@ -39,7 +39,7 @@ class Head(nn.Module):
         self.SpatialConvolution_133 = nn.Conv2d(256, 1024, kernel_size=1, stride=1, padding=0)
         self.BN_135 = nn.BatchNorm2d(1024)
         self.ReLU_136 = nn.ReLU(inplace=True)
-
+    
         # conv5
         self.SpatialConvolution_137 = nn.Conv2d(1024, 512, kernel_size=1, stride=1, padding=0)
         self.BN_138 = nn.BatchNorm2d(512)
@@ -51,7 +51,7 @@ class Head(nn.Module):
         self.SpatialConvolution_144 = nn.Conv2d(1024, 2048, kernel_size=1, stride=2, padding=0)
         self.BN_146 = nn.BatchNorm2d(2048)
         self.ReLU_147 = nn.ReLU(inplace=True)
-
+    
         self.SpatialConvolution_148 = nn.Conv2d(2048, 512, kernel_size=1, stride=1, padding=0)
         self.BN_149 = nn.BatchNorm2d(512)
         self.ReLU_150 = nn.ReLU(inplace=True)
@@ -61,7 +61,7 @@ class Head(nn.Module):
         self.SpatialConvolution_154 = nn.Conv2d(512, 2048, kernel_size=1, stride=1, padding=0)
         self.BN_156 = nn.BatchNorm2d(2048)
         self.ReLU_157 = nn.ReLU(inplace=True)
-
+        
         self.SpatialConvolution_158 = nn.Conv2d(2048, 512, kernel_size=1, stride=1, padding=0)
         self.BN_159 = nn.BatchNorm2d(512)
         self.ReLU_160 = nn.ReLU(inplace=True)
@@ -71,11 +71,13 @@ class Head(nn.Module):
         self.SpatialConvolution_164 = nn.Conv2d(512, 2048, kernel_size=1, stride=1, padding=0)
         self.BN_166 = nn.BatchNorm2d(2048)
         self.ReLU_167 = nn.ReLU(inplace=True)
-
+    
         self.Pooling_168 = nn.AvgPool2d(kernel_size=7, stride=1, padding=0, ceil_mode=True)
 
     def forward(self, x):
         # conv4
+        print("\n\n* Head start    : input = pooled proposals")
+        print("===============================================")
         residual = x
         x = self.SpatialConvolution_107(x)
         x = self.BN_108(x)
@@ -87,7 +89,7 @@ class Head(nn.Module):
         x += residual
         x = self.BN_115(x)
         x = self.ReLU_116(x)
-
+        print("conv4_4 --> ",x.shape)
         residual = x
         x = self.SpatialConvolution_117(x)
         x = self.BN_118(x)
@@ -99,7 +101,7 @@ class Head(nn.Module):
         x += residual
         x = self.BN_125(x)
         x = self.ReLU_126(x)
-
+        print("conv4_5 --> ",x.shape)
         residual = x
         x = self.SpatialConvolution_127(x)
         x = self.BN_128(x)
@@ -111,7 +113,7 @@ class Head(nn.Module):
         x += residual
         x = self.BN_135(x)
         x = self.ReLU_136(x)
-
+        print("conv4_6 --> ",x.shape)
         # conv5
         residual = self.SpatialConvolution_144(x)
         x = self.SpatialConvolution_137(x)
@@ -124,7 +126,7 @@ class Head(nn.Module):
         x += residual
         x = self.BN_146(x)
         x = self.ReLU_147(x)
-
+        print("conv5_1 --> ",x.shape)
         residual = x
         x = self.SpatialConvolution_148(x)
         x = self.BN_149(x)
@@ -136,7 +138,7 @@ class Head(nn.Module):
         x += residual
         x = self.BN_156(x)
         x = self.ReLU_157(x)
-
+        print("conv5_2 --> ",x.shape)
         residual = x
         x = self.SpatialConvolution_158(x)
         x = self.BN_159(x)
@@ -148,6 +150,11 @@ class Head(nn.Module):
         x += residual
         x = self.BN_166(x)
         x = self.ReLU_167(x)
-
+        print("conv5_3 --> ",x.shape)
+        
+        
         x = self.Pooling_168(x)
+        print("GAP --> ",x.shape)
+        print("===============================================")
+        print("* Head finish")
         return x

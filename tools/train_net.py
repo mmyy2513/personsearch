@@ -44,6 +44,9 @@ def parse_args():
     parser.add_argument(
         "--rand", action="store_true", help="Do not use a fixed seed. Default: False"
     )
+    parser.add_argument(
+        "--check", action="store_true", help="just check network flow"
+    )
     parser.add_argument("--solver", default="sgd", help="Training optimizer. Default: sgd")
     parser.add_argument("--tbX", action="store_true", help="Enable tensorboardX. Default: False")
     return parser.parse_args()
@@ -51,7 +54,8 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-
+    check = args.check
+    print(check)
     if args.cfg:
         cfg_from_file(args.cfg)
     if args.data_dir:
@@ -84,7 +88,7 @@ if __name__ == "__main__":
     logging.info("Loaded dataset: %s" % args.dataset)
 
     # Initialize model
-    net = Network()
+    net = Network(check = check)
     if args.weights:
         state_dict = torch.load(args.weights)
         net.load_state_dict({k: v for k, v in state_dict.items() if k in net.state_dict()})
