@@ -43,28 +43,28 @@ class RPN(nn.Module):
             rpn_loss_cls, rpn_loss_bbox (Tensor): Training losses.
         """
         assert base_feat.size(0) == 1, "Single batch only."
-        print("\n\n* RPN Start     : input = feature map")
-        print("===============================================")
+        #print("\n\n* RPN Start     : input = feature map")
+        #print("===============================================")
         rpn_conv = F.relu(self.rpn_conv(base_feat), inplace=True)
-        print("rpn_conv --> ", rpn_conv.shape)
+        #print("rpn_conv --> ", rpn_conv.shape)
         # Predict classification score
         scores = self.rpn_cls_score(rpn_conv)
-        print("rpn_score shape --> ", scores.shape, "\n      ==> rpn_score : batch_size x # anchors * 2 (fore/background) x H x W")
+        #print("rpn_score shape --> ", scores.shape, "\n      ==> rpn_score : batch_size x # anchors * 2 (fore/background) x H x W")
         scores_reshape = self.reshape(scores, 2)
-        print("scores_reshape --> ", scores_reshape.shape, "\n      ==> to apply softmax")
+        #print("scores_reshape --> ", scores_reshape.shape, "\n      ==> to apply softmax")
         probs_reshape = F.softmax(scores_reshape, 1)
         
         probs = self.reshape(probs_reshape, self.num_anchors * 2)
-        print("probs -->", probs.shape, "\n      ==> probability for fore/background")
+        #print("probs -->", probs.shape, "\n      ==> probability for fore/background")
 
         # Predict anchor regression deltas
         anchor_deltas = self.rpn_bbox_pred(rpn_conv)
-        print("anchor_deltas shape --> ", anchor_deltas.shape, "\n      ==> anchor_deltas : batch_size x # anchors * 4 (coordinates) x H x W")
+        #print("anchor_deltas shape --> ", anchor_deltas.shape, "\n      ==> anchor_deltas : batch_size x # anchors * 4 (coordinates) x H x W")
 
         # Produce region proposals
         proposals = self.rpn_proposal(probs.data, anchor_deltas.data, img_info)
-        print("proposals shape --> ",proposals.shape)
-        #print(proposals[1999])
+        #print("proposals shape --> ",proposals.shape)
+        ##print(proposals[1999])
         rpn_loss_cls = 0
         rpn_loss_bbox = 0
         
@@ -82,8 +82,8 @@ class RPN(nn.Module):
             rpn_loss_bbox = smooth_l1_loss(
                 anchor_deltas, gt_anchor_deltas, anchor_inside_ws, anchor_outside_ws, sigma=3
             )
-            print("--> calculate reg, cls loss...")
-            print("            cls_loss : ",rpn_loss_cls.cpu().detach().numpy(),"            reg_loss : ",rpn_loss_bbox.cpu().detach().numpy())
-        print("===============================================")
-        print("* RPN Finish\n")
+            #print("--> calculate reg, cls loss...")
+            #print("            cls_loss : ",rpn_loss_cls.cpu().detach().numpy(),"            reg_loss : ",rpn_loss_bbox.cpu().detach().numpy())
+        #print("===============================================")
+        #print("* RPN Finish\n")
         return proposals, rpn_loss_cls, rpn_loss_bbox

@@ -166,6 +166,9 @@ if __name__ == "__main__":
             img_info = data[1][0].to(device)
             gt_boxes = data[2][0].to(device)
             real_img = data[3].to(device)
+            #print(data[4]); exit()
+            img_root= data[4][0]
+            name = img_root[66:-4]
             total_steps = epoch * real_steps_per_epoch + real_step
             if total_steps == 50000:
                 save_name = os.path.join(output_dir, "checkpoint_step_50000.pth")
@@ -179,7 +182,7 @@ if __name__ == "__main__":
                 torch.save(save_dict, save_name)
 
             _, _, _, _, rpn_loss_cls, rpn_loss_bbox, loss_cls, loss_bbox, loss_oim = net(
-                img, img_info, gt_boxes, real_img
+                img, img_info, gt_boxes, real_img, name
             )
             loss_iter = (rpn_loss_cls + rpn_loss_bbox + loss_cls + loss_bbox + loss_oim) / iter_size
             loss += loss_iter.item()

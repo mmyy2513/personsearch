@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from __future__ import division
-from __future__ import print_function
+#from __future__ import print_function
 
 import argparse
 import csv
@@ -234,14 +234,14 @@ class Network(nn.Module):
         self.check = check
         self.freeze_blocks()
 
-    def forward(self, img, img_info, gt_boxes, real_img, probe_roi=None):
-        print("\n               INPUT")
-        print("===============================================")
-        print("1. img :", img.cpu().numpy().shape)
-        print("2. img_info :", img_info.cpu().numpy())
-        print("3. gt_boxes :", gt_boxes[0].cpu().numpy())
-        print("4. real_img :", real_img.cpu().numpy().shape)
-        print("===============================================")
+    def forward(self, img, img_info, gt_boxes, real_img, name, probe_roi=None):
+        #print("\n               INPUT")
+        #print("===============================================")
+        #print("1. img :", img.cpu().numpy().shape)
+        #print("2. img_info :", img_info.cpu().numpy())
+        #print("3. gt_boxes :", gt_boxes[0].cpu().numpy())
+        #print("4. real_img :", real_img.cpu().numpy().shape)
+        #print("===============================================")
         
         """
         Args:
@@ -267,7 +267,7 @@ class Network(nn.Module):
         )
         
         if c.TEST.MODEL_FILE:
-            print('=> loading model from {}'.format(c.TEST.MODEL_FILE))
+            #print('=> loading model from {}'.format(c.TEST.MODEL_FILE))
             pose_model.load_state_dict(torch.load(c.TEST.MODEL_FILE), strict=False)
 
         
@@ -280,15 +280,16 @@ class Network(nn.Module):
         ids = []
         
         for i in range(num_box):
-            print(i)
+            #print(i)
             gt = gt_boxes[i].numpy()
             re_img = real_img[0].cpu().numpy()
             re_img = cv2.resize(re_img, (img_info[1], img_info[0]))
             
             x1, y1, x2, y2, id = int(gt[0]), int(gt[1]), int(gt[2]),int(gt[3]), int(gt[-1])
-                        
-            img_ = re_img.copy()
             
+            img_ = re_img.copy()
+            img_ = cv2.rectangle(img_, (x1,y1), (x2,y2), (255,0,0), 3)
+            cv2.putText(img_, f'{id}', (x1-5,y1-5), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
             ids.append(id)
             image_bgr = img_
 
@@ -308,17 +309,17 @@ class Network(nn.Module):
             center, scale = box_to_center_scale(box, c.MODEL.IMAGE_SIZE[0], c.MODEL.IMAGE_SIZE[1])
             image_pose = image.copy() if c.DATASET.COLOR_RGB else image_bgr.copy()
             pose_preds = get_pose_estimation_prediction(pose_model, image_pose, center, scale)
-            print(pose_preds)
+            #print(pose_preds)
             if len(pose_preds)>=1:
                 keys.append(pose_preds)
                 for kpt in pose_preds:
                     draw_pose(kpt,image_bgr) # draw the poses
-                
-            save_path = f'{i}.jpg'
+            os.makedirs(f"key_results/{id}", exist_ok = True)
+            save_path = f'key_results/{id}/{name}_{i}.jpg'
             cv2.imwrite(save_path,image_bgr)
             print('the result image has been saved as {}'.format(save_path))
-        print("# of keypoints : ",len(keys))
-        print("ids : ", ids)
+        #print("# of keypoints : ",len(keys))
+        #print("ids : ", ids)
         
         #! gt box cropped --> people
         #! each id --> ids
@@ -347,29 +348,29 @@ class Network(nn.Module):
                 None
             ] * 5
         
-        print("\n* ROI Pooling      : input = proposals, feature map")
-        print("===============================================")
-        print("* applied NMS (#proposals : 2000 --> 128)")
-        print("Proposals shape : ",proposals.shape)
+        #print("\n* ROI Pooling      : input = proposals, feature map")
+        #print("===============================================")
+        #print("* applied NMS (#proposals : 2000 --> 128)")
+        #print("Proposals shape : ",proposals.shape)
         # RoI pooling based on region proposals
         pooled_feat = self.roi_pool(base_feat, proposals)
-        print("\n* proposals --> projection on feature map")
-        print("Feature map shape : ",base_feat.shape)
-        print("\n* roi pooling result : #proposal x 1024 x 14 x 14")
-        print("Pooled proposals shape : ",pooled_feat.shape)
-        print("===============================================")
+        #print("\n* proposals --> projection on feature map")
+        #print("Feature map shape : ",base_feat.shape)
+        #print("\n* roi pooling result : #proposal x 1024 x 14 x 14")
+        #print("Pooled proposals shape : ",pooled_feat.shape)
+        #print("===============================================")
         # Extract the features of proposals
         proposal_feat = self.head(pooled_feat).squeeze(2).squeeze(2)
 
-        print("==> Output shape : ", proposal_feat.shape)
-        print("\n\n* Get probs, deltas and features")
+        #print("==> Output shape : ", proposal_feat.shape)
+        #print("\n\n* Get probs, deltas and features")
         scores = self.cls_score(proposal_feat)
         probs = F.softmax(scores, dim=1)
         proposal_deltas = self.bbox_pred(proposal_feat)
         features = F.normalize(self.feature(proposal_feat))
-        print("Probs shape : ", probs.shape)
-        print("deltas shape : ", proposal_deltas.shape)
-        print("features shape : ", features.shape)
+        #print("Probs shape : ", probs.shape)
+        #print("deltas shape : ", proposal_deltas.shape)
+        #print("features shape : ", features.shape)
 
         if self.training:
             loss_cls = F.cross_entropy(scores, cls_labels)
@@ -388,14 +389,14 @@ class Network(nn.Module):
             loss_oim = F.cross_entropy(matching_scores, pid_labels, ignore_index=-1)
         else:
             loss_cls, loss_bbox, loss_oim = 0, 0, 0
-        print("\n* Calculate Loss(cls, bbox)")
-        print("loss_cls : ", loss_cls.data.cpu().numpy())
-        print("loss_bbox : ", loss_bbox.data.cpu().numpy())
-        print("\n* Calculate Loss(OIM)")
-        print("labeled matching score shape: ", labeled_matching_scores.shape)
-        print("unlabeled matching score shape: ", unlabeled_matching_scores.shape)
-        print("==> loss_oim : ",loss_oim.data.cpu().numpy())
-        print("\n")
+        #print("\n* Calculate Loss(cls, bbox)")
+        #print("loss_cls : ", loss_cls.data.cpu().numpy())
+        #print("loss_bbox : ", loss_bbox.data.cpu().numpy())
+        #print("\n* Calculate Loss(OIM)")
+        #print("labeled matching score shape: ", labeled_matching_scores.shape)
+        #print("unlabeled matching score shape: ", unlabeled_matching_scores.shape)
+        #print("==> loss_oim : ",loss_oim.data.cpu().numpy())
+        #print("\n")
         if self.check == True : exit()
         return (
             proposals,
