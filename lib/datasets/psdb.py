@@ -185,3 +185,10 @@ class PSDB(Dataset):
         pickle(roidb, cache_file)
         logging.info("Save ground-truth roidb to: %s" % cache_file)
         return roidb
+
+a = unpickle("data/cache/psdb_train_roidb.pkl")
+print(a)
+import cv2
+im = cv2.imread("/root/workplace/PersonSearch/person_search/data/dataset/Image/SSM/s9977.jpg")
+
+print("!!!!");print(im); exit()

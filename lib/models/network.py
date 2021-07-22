@@ -1,7 +1,35 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+import argparse
+import csv
+import os
+import shutil
+import cv2
+import numpy as np
+import time
+
+from PIL import Image
 import torch
+import torch.nn.parallel
+import torch.backends.cudnn as cudnn
+import torch.optim
+import torch.utils.data
+import torch.utils.data.distributed
 import torch.nn as nn
 import torch.nn.functional as F
+
+import torchvision
+import torchvision.transforms as transforms
 from torchvision.ops import RoIPool, nms
+
+import _init_paths
+import models
+from config import cfg as c
+from config import update_config
+from core.function import get_final_preds
+from utils.transforms import get_affine_transform
 
 from datasets.data_processing import img_preprocessing
 from models.backbone import Backbone
@@ -14,6 +42,186 @@ from utils.boxes import bbox_transform_inv, clip_boxes
 from utils.config import cfg
 from utils.utils import smooth_l1_loss
 
+COCO_KEYPOINT_INDEXES = {
+    0: 'nose',
+    1: 'left_eye',
+    2: 'right_eye',
+    3: 'left_ear',
+    4: 'right_ear',
+    5: 'left_shoulder',
+    6: 'right_shoulder',
+    7: 'left_elbow',
+    8: 'right_elbow',
+    9: 'left_wrist',
+    10: 'right_wrist',
+    11: 'left_hip',
+    12: 'right_hip',
+    13: 'left_knee',
+    14: 'right_knee',
+    15: 'left_ankle',
+    16: 'right_ankle'
+}
+
+COCO_INSTANCE_CATEGORY_NAMES = [
+    '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+    'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
+    'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+    'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
+    'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+    'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
+    'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
+    'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
+    'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
+    'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
+    'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+]
+
+SKELETON = [
+    [1,3],[1,0],[2,4],[2,0],[0,5],[0,6],[5,7],[7,9],[6,8],[8,10],[5,11],[6,12],[11,12],[11,13],[13,15],[12,14],[14,16]
+]
+
+CocoColors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0],
+              [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255],
+              [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
+
+NUM_KPTS = 17
+
+CTX = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+def draw_pose(keypoints,img):
+    """draw the keypoints and the skeletons.
+    :params keypoints: the shape should be equal to [17,2]
+    :params img:
+    """
+    assert keypoints.shape == (NUM_KPTS,2)
+    for i in range(len(SKELETON)):
+        kpt_a, kpt_b = SKELETON[i][0], SKELETON[i][1]
+        x_a, y_a = keypoints[kpt_a][0],keypoints[kpt_a][1]
+        x_b, y_b = keypoints[kpt_b][0],keypoints[kpt_b][1] 
+        cv2.circle(img, (int(x_a), int(y_a)), 6, CocoColors[i], -1)
+        cv2.circle(img, (int(x_b), int(y_b)), 6, CocoColors[i], -1)
+        cv2.line(img, (int(x_a), int(y_a)), (int(x_b), int(y_b)), CocoColors[i], 2)
+
+def draw_bbox(box,img):
+    """draw the detected bounding box on the image.
+    :param img:
+    """
+    cv2.rectangle(img, box[0], box[1], color=(0, 255, 0),thickness=3)
+
+
+def get_person_detection_boxes(model, img, threshold=0.5):
+    pred = model(img)
+    pred_classes = [COCO_INSTANCE_CATEGORY_NAMES[i]
+                    for i in list(pred[0]['labels'].cpu().numpy())]  # Get the Prediction Score
+    pred_boxes = [[(i[0], i[1]), (i[2], i[3])]
+                  for i in list(pred[0]['boxes'].detach().cpu().numpy())]  # Bounding boxes
+    pred_score = list(pred[0]['scores'].detach().cpu().numpy())
+    if not pred_score or max(pred_score)<threshold:
+        return []
+    # Get list of index with score greater than threshold
+    pred_t = [pred_score.index(x) for x in pred_score if x > threshold][-1]
+    pred_boxes = pred_boxes[:pred_t+1]
+    pred_classes = pred_classes[:pred_t+1]
+
+    person_boxes = []
+    for idx, box in enumerate(pred_boxes):
+        if pred_classes[idx] == 'person':
+            person_boxes.append(box)
+
+    return person_boxes
+
+
+def get_pose_estimation_prediction(pose_model, image, center, scale):
+    rotation = 0
+
+    # pose estimation transformation
+    trans = get_affine_transform(center, scale, rotation, c.MODEL.IMAGE_SIZE)
+    model_input = cv2.warpAffine(
+        image,
+        trans,
+        (int(c.MODEL.IMAGE_SIZE[0]), int(c.MODEL.IMAGE_SIZE[1])),
+        flags=cv2.INTER_LINEAR)
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225]),
+    ])
+
+    # pose estimation inference
+    model_input = transform(model_input).unsqueeze(0)
+    # switch to evaluate mode
+    pose_model.eval()
+    with torch.no_grad():
+        # compute output heatmap
+        output = pose_model(model_input)
+        preds, _ = get_final_preds(
+            c,
+            output.clone().cpu().numpy(),
+            np.asarray([center]),
+            np.asarray([scale]))
+
+        return preds
+
+
+def box_to_center_scale(box, model_image_width, model_image_height):
+    """convert a box to center,scale information required for pose transformation
+    Parameters
+    ----------
+    box : list of tuple
+        list of length 2 with two tuples of floats representing
+        bottom left and top right corner of a box
+    model_image_width : int
+    model_image_height : int
+
+    Returns
+    -------
+    (numpy array, numpy array)
+        Two numpy arrays, coordinates for the center of the box and the scale of the box
+    """
+    center = np.zeros((2), dtype=np.float32)
+
+    bottom_left_corner = box[0]
+    top_right_corner = box[1]
+    box_width = top_right_corner[0]-bottom_left_corner[0]
+    box_height = top_right_corner[1]-bottom_left_corner[1]
+    bottom_left_x = bottom_left_corner[0]
+    bottom_left_y = bottom_left_corner[1]
+    center[0] = bottom_left_x + box_width * 0.5
+    center[1] = bottom_left_y + box_height * 0.5
+
+    aspect_ratio = model_image_width * 1.0 / model_image_height
+    pixel_std = 200
+
+    if box_width > aspect_ratio * box_height:
+        box_height = box_width * 1.0 / aspect_ratio
+    elif box_width < aspect_ratio * box_height:
+        box_width = box_height * aspect_ratio
+    scale = np.array(
+        [box_width * 1.0 / pixel_std, box_height * 1.0 / pixel_std],
+        dtype=np.float32)
+    if center[0] != -1:
+        scale = scale * 1.25
+
+    return center, scale
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Train keypoints network')
+    # general
+    parser.add_argument('--c', type=str, default='demo/inference-config.yaml')
+    #parser.add_argument('--image',type=str)
+    parser.add_argument('opts',
+                        help='Modify config options using the command-line',
+                        default=None,
+                        nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+
+    # args expected by supporting codebase  
+    args.modelDir = ''
+    args.logDir = ''
+    args.dataDir = ''
+    args.prevModelDir = ''
+    return args
 
 class Network(nn.Module):
     """
@@ -62,7 +270,96 @@ class Network(nn.Module):
             rpn_loss_cls, rpn_loss_bbox, loss_cls, loss_bbox and loss_oim (Tensor): Training losses.
         """
         assert img.size(0) == 1, "Single batch only."
+        
+        args = parse_args()
+        update_config(c, args)
+        
+        pose_model = eval('models.'+c.MODEL.NAME+'.get_pose_net')(
+        c, is_train=False
+        )
+        print(img);exit()
+        if c.TEST.MODEL_FILE:
+            print('=> loading model from {}'.format(c.TEST.MODEL_FILE))
+            pose_model.load_state_dict(torch.load(c.TEST.MODEL_FILE), strict=False)
 
+        
+        pose_model = torch.nn.DataParallel(pose_model, device_ids=c.GPUS)
+        pose_model.to(CTX)
+        pose_model.eval()
+
+        num_box = len(gt_boxes)
+        keys = []
+        ids = []
+        
+        for i in range(num_box):
+
+            
+            gt = gt_boxes[i].numpy()
+            print(gt)
+            x1, y1, x2, y2, id = int(gt[0]), int(gt[1]), int(gt[2]),int(gt[3]), int(gt[-1])
+            print(gt)
+            print(x1, x2 ,y1 ,y2, id)
+            img_ = img[i].permute(1,2,0).cpu().numpy()
+
+            image_ = img_.copy()
+            cv2.imwrite("asdnkmasdnmk.jpg", img_)
+            print(img_)
+            exit()
+            img_ = img_.copy()
+            img_x = cv2.rectangle(img_, (x1,y1), (x2,y2), (255,0,0), 3)
+            cv2.imwrite("y.jpg",img_x)
+            print(img_.shape)
+            img12 = img_[y1:y2, x1:x2]
+            print(img12.shape)
+            cv2.imwrite("x.jpg", img12)
+            #img_ = img_[x2: y2, x1: y1]
+            #people.append(img_)
+            ids.append(id)
+            cv2.imwrite("img_.jpg",img_)
+            
+            image_bgr = image_
+            print(image_bgr)
+            # estimate on the image
+            image = image_bgr[:, :, [2, 1, 0]]
+            #print(image)
+            exit()
+            input = []
+            img = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+            img_tensor = torch.from_numpy(img/255.).permute(2,0,1).float().to(CTX)
+            input.append(img_tensor)
+            #gb = gt_boxes[num].numpy()
+            
+            # object detection box
+            box = [(x1,y1), (x2,y2)]
+            print(box)
+
+            # pose estimation
+            
+            center, scale = box_to_center_scale(box, c.MODEL.IMAGE_SIZE[0], c.MODEL.IMAGE_SIZE[1])
+            print("~!",center, scale)
+            image_pose = image.copy() if c.DATASET.COLOR_RGB else image_bgr.copy()
+            print(image_pose)
+            pose_preds = get_pose_estimation_prediction(pose_model, image_pose, center, scale)
+            # print(pose_preds)
+            print(pose_preds.shape)
+            print(pose_preds)
+            if len(pose_preds)>=1:
+                keys.append(pose_preds)
+                for kpt in pose_preds:
+                    # print(kpt)
+                    # print(kpt.shape)
+                    # exit()
+                    draw_pose(kpt,image_bgr) # draw the poses
+                
+            
+            save_path = f'{i}.jpg'
+            cv2.imwrite(save_path,image_bgr)
+            print('the result image has been saved as {}'.format(save_path))
+        print("# of keypoints : ",len(keys))
+        print("ids : ", ids)
+        exit()
+        #! gt box cropped --> people
+        #! each id --> ids
         # Extract basic feature from image data
         base_feat = self.backbone(img)
 
