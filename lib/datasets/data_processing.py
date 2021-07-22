@@ -28,7 +28,7 @@ def build_net_input(roidb):
 
     img_info = torch.Tensor([processed_img.shape[1], processed_img.shape[2], scale])
 
-    return torch.from_numpy(processed_img), img_info, torch.from_numpy(gt_boxes)
+    return torch.from_numpy(processed_img), img_info, torch.from_numpy(gt_boxes), img
 
 
 def img_preprocessing(img, flipped=False):

@@ -63,18 +63,7 @@ COCO_KEYPOINT_INDEXES = {
 }
 
 COCO_INSTANCE_CATEGORY_NAMES = [
-    '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-    'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
-    'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-    'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
-    'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
-    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-    'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-    'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
-    'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
-    'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
-    'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
-    'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+    '__background__', 'person'
 ]
 
 SKELETON = [
@@ -109,7 +98,6 @@ def draw_bbox(box,img):
     """
     cv2.rectangle(img, box[0], box[1], color=(0, 255, 0),thickness=3)
 
-
 def get_person_detection_boxes(model, img, threshold=0.5):
     pred = model(img)
     pred_classes = [COCO_INSTANCE_CATEGORY_NAMES[i]
@@ -130,7 +118,6 @@ def get_person_detection_boxes(model, img, threshold=0.5):
             person_boxes.append(box)
 
     return person_boxes
-
 
 def get_pose_estimation_prediction(pose_model, image, center, scale):
     rotation = 0
@@ -162,7 +149,6 @@ def get_pose_estimation_prediction(pose_model, image, center, scale):
             np.asarray([scale]))
 
         return preds
-
 
 def box_to_center_scale(box, model_image_width, model_image_height):
     """convert a box to center,scale information required for pose transformation
@@ -248,13 +234,15 @@ class Network(nn.Module):
         self.check = check
         self.freeze_blocks()
 
-    def forward(self, img, img_info, gt_boxes, probe_roi=None):
+    def forward(self, img, img_info, gt_boxes, real_img, probe_roi=None):
         print("\n               INPUT")
         print("===============================================")
         print("1. img :", img.cpu().numpy().shape)
         print("2. img_info :", img_info.cpu().numpy())
         print("3. gt_boxes :", gt_boxes[0].cpu().numpy())
+        print("4. real_img :", real_img.cpu().numpy().shape)
         print("===============================================")
+        
         """
         Args:
             img (Tensor): Single image data.
@@ -277,7 +265,7 @@ class Network(nn.Module):
         pose_model = eval('models.'+c.MODEL.NAME+'.get_pose_net')(
         c, is_train=False
         )
-        print(img);exit()
+        
         if c.TEST.MODEL_FILE:
             print('=> loading model from {}'.format(c.TEST.MODEL_FILE))
             pose_model.load_state_dict(torch.load(c.TEST.MODEL_FILE), strict=False)
@@ -292,72 +280,46 @@ class Network(nn.Module):
         ids = []
         
         for i in range(num_box):
-
-            
+            print(i)
             gt = gt_boxes[i].numpy()
-            print(gt)
-            x1, y1, x2, y2, id = int(gt[0]), int(gt[1]), int(gt[2]),int(gt[3]), int(gt[-1])
-            print(gt)
-            print(x1, x2 ,y1 ,y2, id)
-            img_ = img[i].permute(1,2,0).cpu().numpy()
-
-            image_ = img_.copy()
-            cv2.imwrite("asdnkmasdnmk.jpg", img_)
-            print(img_)
-            exit()
-            img_ = img_.copy()
-            img_x = cv2.rectangle(img_, (x1,y1), (x2,y2), (255,0,0), 3)
-            cv2.imwrite("y.jpg",img_x)
-            print(img_.shape)
-            img12 = img_[y1:y2, x1:x2]
-            print(img12.shape)
-            cv2.imwrite("x.jpg", img12)
-            #img_ = img_[x2: y2, x1: y1]
-            #people.append(img_)
-            ids.append(id)
-            cv2.imwrite("img_.jpg",img_)
+            re_img = real_img[0].cpu().numpy()
+            re_img = cv2.resize(re_img, (img_info[1], img_info[0]))
             
-            image_bgr = image_
-            print(image_bgr)
+            x1, y1, x2, y2, id = int(gt[0]), int(gt[1]), int(gt[2]),int(gt[3]), int(gt[-1])
+                        
+            img_ = re_img.copy()
+            
+            ids.append(id)
+            image_bgr = img_
+
             # estimate on the image
-            image = image_bgr[:, :, [2, 1, 0]]
-            #print(image)
-            exit()
+            image = image_bgr[:, :, [2, 1, 0]] # rgb
+            
             input = []
-            img = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-            img_tensor = torch.from_numpy(img/255.).permute(2,0,1).float().to(CTX)
+            img_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+            img_tensor = torch.from_numpy(img_rgb/255.).permute(2,0,1).float().to(CTX)
             input.append(img_tensor)
             #gb = gt_boxes[num].numpy()
             
             # object detection box
             box = [(x1,y1), (x2,y2)]
-            print(box)
-
-            # pose estimation
             
+            # pose estimation
             center, scale = box_to_center_scale(box, c.MODEL.IMAGE_SIZE[0], c.MODEL.IMAGE_SIZE[1])
-            print("~!",center, scale)
             image_pose = image.copy() if c.DATASET.COLOR_RGB else image_bgr.copy()
-            print(image_pose)
             pose_preds = get_pose_estimation_prediction(pose_model, image_pose, center, scale)
-            # print(pose_preds)
-            print(pose_preds.shape)
             print(pose_preds)
             if len(pose_preds)>=1:
                 keys.append(pose_preds)
                 for kpt in pose_preds:
-                    # print(kpt)
-                    # print(kpt.shape)
-                    # exit()
                     draw_pose(kpt,image_bgr) # draw the poses
                 
-            
             save_path = f'{i}.jpg'
             cv2.imwrite(save_path,image_bgr)
             print('the result image has been saved as {}'.format(save_path))
         print("# of keypoints : ",len(keys))
         print("ids : ", ids)
-        exit()
+        
         #! gt box cropped --> people
         #! each id --> ids
         # Extract basic feature from image data

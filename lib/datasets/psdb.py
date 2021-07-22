@@ -7,6 +7,10 @@ from PIL import Image
 from scipy.io import loadmat
 from torch.utils.data import Dataset
 
+import sys
+#print(os.getcwd())
+sys.path.append(".")
+
 from datasets.data_processing import build_net_input
 from utils.config import cfg
 from utils.utils import pickle, unpickle
@@ -186,9 +190,9 @@ class PSDB(Dataset):
         logging.info("Save ground-truth roidb to: %s" % cache_file)
         return roidb
 
-a = unpickle("data/cache/psdb_train_roidb.pkl")
-print(a)
-import cv2
-im = cv2.imread("/root/workplace/PersonSearch/person_search/data/dataset/Image/SSM/s9977.jpg")
+#a = unpickle("../data/cache/psdb_train_roidb.pkl")
+#print(a[0]['image'])
+# import cv2
+# im = cv2.imread("/root/workplace/PersonSearch/person_search/data/dataset/Image/SSM/s9977.jpg")
 
-print("!!!!");print(im); exit()
+# print("!!!!");print(im); exit()
