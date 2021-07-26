@@ -1,7 +1,9 @@
 import cv2
 import numpy as np
 import torch
-
+# import sys
+# sys.path.append("../../")
+# sys.path.append("../")
 from utils.config import cfg
 
 
@@ -27,8 +29,8 @@ def build_net_input(roidb):
     gt_boxes[:, 5] = roidb["gt_pids"]
 
     img_info = torch.Tensor([processed_img.shape[1], processed_img.shape[2], scale])
-
-    return torch.from_numpy(processed_img), img_info, torch.from_numpy(gt_boxes), img, roidb["image"]
+    
+    return torch.from_numpy(processed_img), img_info, torch.from_numpy(gt_boxes), img, roidb["image"], roidb['flipped']
 
 
 def img_preprocessing(img, flipped=False):
@@ -45,7 +47,7 @@ def img_preprocessing(img, flipped=False):
     """
     if flipped:
         img = img[:, ::-1, :]
-
+    #TODO : flip 확인 --> gt도 변경해야함
     processed_img = img.astype(np.float32)
     processed_img -= cfg.PIXEL_MEANS
 
@@ -61,3 +63,12 @@ def img_preprocessing(img, flipped=False):
 
     processed_img = processed_img.transpose((2, 0, 1))  # [H, W, C] -> [C, H, W]
     return processed_img, scale
+
+# im = cv2.imread("/root/workplace/PersonSearch/person_search/data/dataset/Image/SSM/s9977.jpg")
+
+# a, b = img_preprocessing(im, flipped= True)
+# print(a.shape)
+# a = a.transpose(1, 2, 0)
+# print(a.shape)
+# cv2.imwrite("111.jpg", a)
+# cv2.imwrite("112.jpg", im)

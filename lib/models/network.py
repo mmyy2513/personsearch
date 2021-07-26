@@ -234,7 +234,7 @@ class Network(nn.Module):
         self.check = check
         self.freeze_blocks()
 
-    def forward(self, img, img_info, gt_boxes, real_img, name, probe_roi=None):
+    def forward(self, img, img_info, gt_boxes, real_img, name, fl, probe_roi=None):
         #print("\n               INPUT")
         #print("===============================================")
         #print("1. img :", img.cpu().numpy().shape)
@@ -281,15 +281,20 @@ class Network(nn.Module):
         
         for i in range(num_box):
             #print(i)
-            gt = gt_boxes[i].numpy()
+            
+            gt = gt_boxes[i].cpu().numpy()
             re_img = real_img[0].cpu().numpy()
             re_img = cv2.resize(re_img, (img_info[1], img_info[0]))
+            
+            if fl == True:
+                re_img = cv2.flip(re_img, 1)
             
             x1, y1, x2, y2, id = int(gt[0]), int(gt[1]), int(gt[2]),int(gt[3]), int(gt[-1])
             
             img_ = re_img.copy()
             img_ = cv2.rectangle(img_, (x1,y1), (x2,y2), (255,0,0), 3)
             cv2.putText(img_, f'{id}', (x1-5,y1-5), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
+
             ids.append(id)
             image_bgr = img_
 

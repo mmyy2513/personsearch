@@ -7,9 +7,10 @@ from PIL import Image
 from scipy.io import loadmat
 from torch.utils.data import Dataset
 
-import sys
-#print(os.getcwd())
-sys.path.append(".")
+# import sys
+# #print(os.getcwd())
+# sys.path.append(".")
+# sys.path.append("../")
 
 from datasets.data_processing import build_net_input
 from utils.config import cfg
@@ -189,10 +190,30 @@ class PSDB(Dataset):
         pickle(roidb, cache_file)
         logging.info("Save ground-truth roidb to: %s" % cache_file)
         return roidb
+# #print(os.getcwd())
+# a = unpickle("../../data/cache/psdb_train_roidb.pkl")
+# #print(a[]['flipped'])
+# # import cv2
+# # im = cv2.imread("/root/workplace/PersonSearch/person_search/data/dataset/Image/SSM/s9977.jpg")
 
-#a = unpickle("../data/cache/psdb_train_roidb.pkl")
-#print(a[0]['image'])
-# import cv2
-# im = cv2.imread("/root/workplace/PersonSearch/person_search/data/dataset/Image/SSM/s9977.jpg")
+# # print("!!!!");print(im); exit()
 
-# print("!!!!");print(im); exit()
+# test = loadmat(osp.join("../../data/dataset", "annotation", "pool.mat"))
+# test = test["pool"].squeeze()
+# test = [str(a[0]) for a in test]
+
+# # All images
+# all_imgs = loadmat(osp.join("../../data/dataset", "annotation", "Images.mat"))
+# all_imgs = all_imgs["Img"].squeeze()
+# all_imgs = [str(a[0][0]) for a in all_imgs]
+
+# # Training images = all images - test images
+# train = list(set(all_imgs) - set(test))
+# train.sort()
+
+# t = train
+# t2 = train * 2
+# print(len(t))
+# print(len(t2))
+# print([1,2,3])
+# print([1,2,3] * 2)
