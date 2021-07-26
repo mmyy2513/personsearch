@@ -209,6 +209,19 @@ def parse_args():
     args.prevModelDir = ''
     return args
 
+#* Euclidean distance between points
+def dist_feat(points):
+    if type(points) != torch.Tensor:
+        points = torch.Tensor(points)
+    if points.dim() == 3:
+        points.squeeze_()
+    assert points.dim() == 2
+    feat = []
+    for i in range(len(points)):
+        for j in range(i+1, len(points)):
+            feat.append(torch.dist(points[i], points[j]).item())
+    return torch.Tensor(feat)
+
 class Network(nn.Module):
     """
     Person search network.
@@ -314,6 +327,14 @@ class Network(nn.Module):
             center, scale = box_to_center_scale(box, c.MODEL.IMAGE_SIZE[0], c.MODEL.IMAGE_SIZE[1])
             image_pose = image.copy() if c.DATASET.COLOR_RGB else image_bgr.copy()
             pose_preds = get_pose_estimation_prediction(pose_model, image_pose, center, scale)
+            #print(pose_preds)
+            print(pose_preds.shape)
+            dist = dist_feat(pose_preds)
+            #print(dist)
+            print(type(dist))
+            print(len(dist)); exit()
+            
+            #exit()
             #print(pose_preds)
             if len(pose_preds)>=1:
                 keys.append(pose_preds)
